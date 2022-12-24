@@ -34,13 +34,15 @@ class PPAClsPredictor:
         self.configs = dict_to_object(configs)
         assert self.configs.use_model in SUPPORT_MODEL, f'没有该模型：{self.configs.use_model}'
         # 获取特征器
-        self.audio_featurizer = AudioFeaturizer(feature_conf=self.configs.feature_conf, **self.configs.preprocess_conf)
+        self.audio_featurizer = AudioFeaturizer(
+            feature_conf=self.configs.feature_conf, **self.configs.preprocess_conf)
         self.audio_featurizer.to(self.device)
         # 获取模型
         if self.configs.use_model == 'ecapa_tdnn':
-            self.predictor = EcapaTdnn(input_size=self.audio_featurizer.feature_dim,
-                                       num_classes=self.configs.dataset_conf.num_class,
-                                       **self.configs.model_conf)
+            self.predictor = EcapaTdnn(
+                input_size=self.audio_featurizer.feature_dim,
+                num_classes=self.configs.dataset_conf.num_class,
+                **self.configs.model_conf)
         elif self.configs.use_model == 'panns_cnn6':
             self.predictor = CNN6(input_size=self.audio_featurizer.feature_dim,
                                   num_class=self.configs.dataset_conf.num_class,
@@ -68,14 +70,13 @@ class PPAClsPredictor:
         print(f"成功加载模型参数：{model_path}")
         self.predictor.eval()
         # 获取分类标签
-        with open(self.configs.dataset_conf.label_list_path, 'r', encoding='utf-8') as f:
+        with open(self.configs.dataset_conf.label_list_path, 'r',
+                  encoding='utf-8') as f:
             lines = f.readlines()
-        self.class_labels = [l.replace('\n', '') for l in lines]
+        self.class_labels = [li.replace('\n', '') for li in lines]
 
     # 预测一个音频的特征
-    def predict(self,
-                audio_data,
-                sample_rate=16000):
+    def predict(self, audio_data, sample_rate=16000):
         """预测一个音频
 
         :param audio_data: 需要识别的数据，支持文件路径，字节，numpy
@@ -91,7 +92,9 @@ class PPAClsPredictor:
             input_data = AudioSegment.from_wave_bytes(audio_data)
         else:
             raise Exception(f'不支持该数据类型，当前数据类型为：{type(audio_data)}')
-        input_data = torch.tensor(input_data.samples, dtype=torch.float32, device=self.device).unsqueeze(0)
+        input_data = torch.tensor(input_data.samples,
+                                  dtype=torch.float32,
+                                  device=self.device).unsqueeze(0)
         audio_feature = self.audio_featurizer(input_data)
         # 执行预测
         output = self.predictor(audio_feature)
@@ -114,12 +117,14 @@ class PPAClsPredictor:
         max_audio_length = batch[0].shape[0]
         batch_size = len(batch)
         # 以最大的长度创建0张量
-        inputs = np.zeros((batch_size, max_audio_length, freq_size), dtype=np.float32)
+        inputs = np.zeros((batch_size, max_audio_length, freq_size),
+                          dtype=np.float32)
         for i, sample in enumerate(batch):
             seq_length = sample.shape[0]
             # 将数据插入都0张量中，实现了padding
             inputs[i, :seq_length, :] = sample[:, :]
-        audios_data = torch.tensor(inputs, dtype=torch.float32, device=self.device).unsqueeze(0)
+        audios_data = torch.tensor(inputs, dtype=torch.float32,
+                                   device=self.device).unsqueeze(0)
         # 执行预测
         output = self.predictor(audios_data)
         results = torch.nn.functional.softmax(output, dim=-1)

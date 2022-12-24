@@ -48,7 +48,11 @@ def dict_to_object(dict_obj):
     return inst
 
 
-def plot_confusion_matrix(cm, save_path, class_labels, title='Confusion Matrix', show=False):
+def plot_confusion_matrix(cm,
+                          save_path,
+                          class_labels,
+                          title='Confusion Matrix',
+                          show=False):
     plt.figure(figsize=(12, 8), dpi=100)
     np.set_printoptions(precision=2)
     # 在混淆矩阵中每格的概率值
@@ -57,8 +61,15 @@ def plot_confusion_matrix(cm, save_path, class_labels, title='Confusion Matrix',
     for x_val, y_val in zip(x.flatten(), y.flatten()):
         c = cm[y_val][x_val] / (np.sum(cm[:, x_val]) + 1e-6)
         # 忽略值太小的
-        if c < 1e-4: continue
-        plt.text(x_val, y_val, "%0.2f" % (c,), color='red', fontsize=15, va='center', ha='center')
+        if c < 1e-4:
+            continue
+        plt.text(x_val,
+                 y_val,
+                 "%0.2f" % (c, ),
+                 color='red',
+                 fontsize=15,
+                 va='center',
+                 ha='center')
     m = np.max(cm)
     plt.imshow(cm / m, interpolation='nearest', cmap=plt.cm.binary)
     plt.title(title)

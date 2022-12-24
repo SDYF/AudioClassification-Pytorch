@@ -47,54 +47,68 @@ class PPAClsTrainer(object):
         self.model = None
         self.test_loader = None
         # 获取分类标签
-        with open(self.configs.dataset_conf.label_list_path, 'r', encoding='utf-8') as f:
+        with open(self.configs.dataset_conf.label_list_path, 'r',
+                  encoding='utf-8') as f:
             lines = f.readlines()
-        self.class_labels = [l.replace('\n', '') for l in lines]
+        self.class_labels = [li.replace('\n', '') for li in lines]
         if platform.system().lower() == 'windows':
             self.configs.dataset_conf.num_workers = 0
             logger.warning('Windows系统不支持多线程读取数据，已自动关闭！')
         # 获取特征器
-        self.audio_featurizer = AudioFeaturizer(feature_conf=self.configs.feature_conf, **self.configs.preprocess_conf)
+        self.audio_featurizer = AudioFeaturizer(
+            feature_conf=self.configs.feature_conf, **self.configs.preprocess_conf)
 
     def __setup_dataloader(self, augment_conf_path=None, is_train=False):
         # 获取训练数据
-        if augment_conf_path is not None and os.path.exists(augment_conf_path) and is_train:
-            augmentation_config = io.open(augment_conf_path, mode='r', encoding='utf8').read()
+        if augment_conf_path is not None and os.path.exists(
+                augment_conf_path) and is_train:
+            augmentation_config = io.open(augment_conf_path,
+                                          mode='r',
+                                          encoding='utf8').read()
         else:
-            if augment_conf_path is not None and not os.path.exists(augment_conf_path):
+            if augment_conf_path is not None and not os.path.exists(
+                    augment_conf_path):
                 logger.info('数据增强配置文件{}不存在'.format(augment_conf_path))
             augmentation_config = '{}'
         if is_train:
-            self.train_dataset = CustomDataset(data_list_path=self.configs.dataset_conf.train_list,
-                                               do_vad=self.configs.dataset_conf.chunk_duration,
-                                               chunk_duration=self.configs.dataset_conf.chunk_duration,
-                                               min_duration=self.configs.dataset_conf.min_duration,
-                                               augmentation_config=augmentation_config,
-                                               sample_rate=self.configs.dataset_conf.sample_rate,
-                                               use_dB_normalization=self.configs.dataset_conf.use_dB_normalization,
-                                               target_dB=self.configs.dataset_conf.target_dB,
-                                               mode='train')
+            self.train_dataset = CustomDataset(
+                data_list_path=self.configs.dataset_conf.train_list,
+                do_vad=self.configs.dataset_conf.chunk_duration,
+                chunk_duration=self.configs.dataset_conf.chunk_duration,
+                min_duration=self.configs.dataset_conf.min_duration,
+                augmentation_config=augmentation_config,
+                sample_rate=self.configs.dataset_conf.sample_rate,
+                use_dB_normalization=self.configs.dataset_conf.use_dB_normalization,
+                target_dB=self.configs.dataset_conf.target_dB,
+                mode='train')
             train_sampler = None
             if torch.cuda.device_count() > 1:
                 # 设置支持多卡训练
                 train_sampler = DistributedSampler(dataset=self.train_dataset)
-            self.train_loader = DataLoader(dataset=self.train_dataset,
-                                           shuffle=(train_sampler is None),
-                                           batch_size=self.configs.dataset_conf.batch_size,
-                                           sampler=train_sampler,
-                                           num_workers=self.configs.dataset_conf.num_workers)
+            self.train_loader = DataLoader(
+                dataset=self.train_dataset,
+                shuffle=(train_sampler is None),
+                batch_size=self.configs.dataset_conf.batch_size,
+                sampler=train_sampler,
+                num_workers=self.configs.dataset_conf.num_workers)
         # 获取测试数据
-        self.test_dataset = CustomDataset(data_list_path=self.configs.dataset_conf.test_list,
-                                          do_vad=self.configs.dataset_conf.chunk_duration,
-                                          chunk_duration=self.configs.dataset_conf.chunk_duration,
-                                          min_duration=self.configs.dataset_conf.min_duration,
-                                          sample_rate=self.configs.dataset_conf.sample_rate,
-                                          use_dB_normalization=self.configs.dataset_conf.use_dB_normalization,
-                                          target_dB=self.configs.dataset_conf.target_dB,
-                                          mode='eval')
-        self.test_loader = DataLoader(dataset=self.test_dataset,
-                                      batch_size=self.configs.dataset_conf.batch_size,
-                                      num_workers=self.configs.dataset_conf.num_workers)
+
+        # 此处少了else
+
+        else:
+            self.test_dataset = CustomDataset(
+                data_list_path=self.configs.dataset_conf.test_list,
+                do_vad=self.configs.dataset_conf.chunk_duration,
+                chunk_duration=self.configs.dataset_conf.chunk_duration,
+                min_duration=self.configs.dataset_conf.min_duration,
+                sample_rate=self.configs.dataset_conf.sample_rate,
+                use_dB_normalization=self.configs.dataset_conf.use_dB_normalization,
+                target_dB=self.configs.dataset_conf.target_dB,
+                mode='eval')
+            self.test_loader = DataLoader(
+                dataset=self.test_dataset,
+                batch_size=self.configs.dataset_conf.batch_size,
+                num_workers=self.configs.dataset_conf.num_workers)
 
     def __setup_model(self, input_size, is_train=False):
         # 获取模型
@@ -124,11 +138,13 @@ class PPAClsTrainer(object):
         self.loss = torch.nn.CrossEntropyLoss()
         if is_train:
             # 获取优化方法
-            self.optimizer = torch.optim.Adam(params=self.model.parameters(),
-                                              lr=float(self.configs.optimizer_conf.learning_rate),
-                                              weight_decay=float(self.configs.optimizer_conf.weight_decay))
+            self.optimizer = torch.optim.Adam(
+                params=self.model.parameters(),
+                lr=float(self.configs.optimizer_conf.learning_rate),
+                weight_decay=float(self.configs.optimizer_conf.weight_decay))
             # 学习率衰减函数
-            self.scheduler = CosineAnnealingLR(self.optimizer, T_max=int(self.configs.train_conf.max_epoch * 1.2))
+            self.scheduler = CosineAnnealingLR(
+                self.optimizer, T_max=int(self.configs.train_conf.max_epoch * 1.2))
 
     def __load_pretrained(self, pretrained_model):
         # 加载预训练模型
@@ -145,8 +161,10 @@ class PPAClsTrainer(object):
             for name, weight in model_dict.items():
                 if name in model_state_dict.keys():
                     if list(weight.shape) != list(model_state_dict[name].shape):
-                        logger.warning('{} not used, shape {} unmatched with {} in model.'.
-                                       format(name, list(model_state_dict[name].shape), list(weight.shape)))
+                        logger.warning(
+                            '{} not used, shape {} unmatched with {} in model.'.
+                            format(name, list(model_state_dict[name].shape),
+                                   list(weight.shape)))
                         model_state_dict.pop(name, None)
                 else:
                     logger.warning('Lack weight: {}'.format(name))
@@ -159,22 +177,30 @@ class PPAClsTrainer(object):
     def __load_checkpoint(self, save_model_path, resume_model):
         last_epoch = -1
         best_acc = 0
-        last_model_dir = os.path.join(save_model_path,
-                                      f'{self.configs.use_model}_{self.configs.preprocess_conf.feature_method}',
-                                      'last_model')
-        if resume_model is not None or (os.path.exists(os.path.join(last_model_dir, 'model.pt'))
-                                        and os.path.exists(os.path.join(last_model_dir, 'optimizer.pt'))):
+        last_model_dir = os.path.join(
+            save_model_path,
+            f'{self.configs.use_model}_{self.configs.preprocess_conf.feature_method}',
+            'last_model')
+        if resume_model is not None or (
+                os.path.exists(os.path.join(last_model_dir, 'model.pt'))
+                and os.path.exists(os.path.join(last_model_dir, 'optimizer.pt'))):
             # 自动获取最新保存的模型
-            if resume_model is None: resume_model = last_model_dir
-            assert os.path.exists(os.path.join(resume_model, 'model.pt')), "模型参数文件不存在！"
-            assert os.path.exists(os.path.join(resume_model, 'optimizer.pt')), "优化方法参数文件不存在！"
+            if resume_model is None:
+                resume_model = last_model_dir
+            assert os.path.exists(os.path.join(resume_model,
+                                               'model.pt')), "模型参数文件不存在！"
+            assert os.path.exists(os.path.join(resume_model,
+                                               'optimizer.pt')), "优化方法参数文件不存在！"
             state_dict = torch.load(os.path.join(resume_model, 'model.pt'))
             if isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
                 self.model.module.load_state_dict(state_dict)
             else:
                 self.model.load_state_dict(state_dict)
-            self.optimizer.load_state_dict(torch.load(os.path.join(resume_model, 'optimizer.pt')))
-            with open(os.path.join(resume_model, 'model.state'), 'r', encoding='utf-8') as f:
+            self.optimizer.load_state_dict(
+                torch.load(os.path.join(resume_model, 'optimizer.pt')))
+            with open(os.path.join(resume_model, 'model.state'),
+                      'r',
+                      encoding='utf-8') as f:
                 json_data = json.load(f)
                 last_epoch = json_data['last_epoch'] - 1
                 best_acc = json_data['accuracy']
@@ -182,34 +208,44 @@ class PPAClsTrainer(object):
         return last_epoch, best_acc
 
     # 保存模型
-    def __save_checkpoint(self, save_model_path, epoch_id, best_acc=0., best_model=False):
+    def __save_checkpoint(self,
+                          save_model_path,
+                          epoch_id,
+                          best_acc=0.,
+                          best_model=False):
         if isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
             state_dict = self.model.module.state_dict()
         else:
             state_dict = self.model.state_dict()
         if best_model:
-            model_path = os.path.join(save_model_path,
-                                      f'{self.configs.use_model}_{self.configs.preprocess_conf.feature_method}',
-                                      'best_model')
+            model_path = os.path.join(
+                save_model_path,
+                f'{self.configs.use_model}_{self.configs.preprocess_conf.feature_method}',
+                'best_model')
         else:
-            model_path = os.path.join(save_model_path,
-                                      f'{self.configs.use_model}_{self.configs.preprocess_conf.feature_method}',
-                                      'epoch_{}'.format(epoch_id))
+            model_path = os.path.join(
+                save_model_path,
+                f'{self.configs.use_model}_{self.configs.preprocess_conf.feature_method}',
+                'epoch_{}'.format(epoch_id))
         os.makedirs(model_path, exist_ok=True)
-        torch.save(self.optimizer.state_dict(), os.path.join(model_path, 'optimizer.pt'))
+        torch.save(self.optimizer.state_dict(),
+                   os.path.join(model_path, 'optimizer.pt'))
         torch.save(state_dict, os.path.join(model_path, 'model.pt'))
-        with open(os.path.join(model_path, 'model.state'), 'w', encoding='utf-8') as f:
+        with open(os.path.join(model_path, 'model.state'), 'w',
+                  encoding='utf-8') as f:
             f.write('{"last_epoch": %d, "accuracy": %f}' % (epoch_id, best_acc))
         if not best_model:
-            last_model_path = os.path.join(save_model_path,
-                                           f'{self.configs.use_model}_{self.configs.preprocess_conf.feature_method}',
-                                           'last_model')
+            last_model_path = os.path.join(
+                save_model_path,
+                f'{self.configs.use_model}_{self.configs.preprocess_conf.feature_method}',
+                'last_model')
             shutil.rmtree(last_model_path, ignore_errors=True)
             shutil.copytree(model_path, last_model_path)
             # 删除旧的模型
-            old_model_path = os.path.join(save_model_path,
-                                          f'{self.configs.use_model}_{self.configs.preprocess_conf.feature_method}',
-                                          'epoch_{}'.format(epoch_id - 3))
+            old_model_path = os.path.join(
+                save_model_path,
+                f'{self.configs.use_model}_{self.configs.preprocess_conf.feature_method}',
+                'epoch_{}'.format(epoch_id - 3))
             if os.path.exists(old_model_path):
                 shutil.rmtree(old_model_path)
         logger.info('已保存模型：{}'.format(model_path))
@@ -246,19 +282,24 @@ class PPAClsTrainer(object):
             # 多卡训练只使用一个进程打印
             if batch_id % self.configs.train_conf.log_interval == 0 and local_rank == 0:
                 # 计算每秒训练数据量
-                train_speed = self.configs.dataset_conf.batch_size / (sum(train_times) / len(train_times) / 1000)
+                train_speed = self.configs.dataset_conf.batch_size / (
+                    sum(train_times) / len(train_times) / 1000)
                 # 计算剩余时间
                 eta_sec = (sum(train_times) / len(train_times)) * (
-                        sum_batch - (epoch_id - 1) * len(self.train_loader) - batch_id)
+                    sum_batch - (epoch_id - 1) * len(self.train_loader) - batch_id)
                 eta_str = str(timedelta(seconds=int(eta_sec / 1000)))
-                logger.info(f'Train epoch: [{epoch_id}/{self.configs.train_conf.max_epoch}], '
-                            f'batch: [{batch_id}/{len(self.train_loader)}], '
-                            f'loss: {sum(loss_sum) / len(loss_sum):.5f}, '
-                            f'accuracy: {sum(accuracies) / len(accuracies):.5f}, '
-                            f'learning rate: {self.scheduler.get_last_lr()[0]:>.8f}, '
-                            f'speed: {train_speed:.2f} data/sec, eta: {eta_str}')
-                writer.add_scalar('Train/Loss', sum(loss_sum) / len(loss_sum), self.train_step)
-                writer.add_scalar('Train/Accuracy', (sum(accuracies) / len(accuracies)), self.train_step)
+                logger.info(
+                    f'Train epoch: [{epoch_id}/{self.configs.train_conf.max_epoch}], '
+                    f'batch: [{batch_id}/{len(self.train_loader)}], '
+                    f'loss: {sum(loss_sum) / len(loss_sum):.5f}, '
+                    f'accuracy: {sum(accuracies) / len(accuracies):.5f}, '
+                    f'learning rate: {self.scheduler.get_last_lr()[0]:>.8f}, '
+                    f'speed: {train_speed:.2f} data/sec, eta: {eta_str}')
+                writer.add_scalar('Train/Loss',
+                                  sum(loss_sum) / len(loss_sum), self.train_step)
+                writer.add_scalar('Train/Accuracy',
+                                  (sum(accuracies) / len(accuracies)),
+                                  self.train_step)
                 train_times = []
             start = time.time()
         self.scheduler.step()
@@ -291,50 +332,67 @@ class PPAClsTrainer(object):
         # 获取数据
         self.__setup_dataloader(augment_conf_path=augment_conf_path, is_train=True)
         # 获取模型
-        self.__setup_model(input_size=self.audio_featurizer.feature_dim, is_train=True)
+        self.__setup_model(input_size=self.audio_featurizer.feature_dim,
+                           is_train=True)
 
         # 支持多卡训练
         if nranks > 1 and self.use_gpu:
             self.model.to(local_rank)
-            self.model = torch.nn.parallel.DistributedDataParallel(self.model, device_ids=[local_rank])
+            self.model = torch.nn.parallel.DistributedDataParallel(
+                self.model, device_ids=[local_rank])
         logger.info('训练数据：{}'.format(len(self.train_dataset)))
 
         self.__load_pretrained(pretrained_model=pretrained_model)
         # 加载恢复模型
-        last_epoch, best_acc = self.__load_checkpoint(save_model_path=save_model_path, resume_model=resume_model)
+        last_epoch, best_acc = self.__load_checkpoint(
+            save_model_path=save_model_path, resume_model=resume_model)
 
         test_step, self.train_step = 0, 0
         last_epoch += 1
         if local_rank == 0:
-            writer.add_scalar('Train/lr', self.scheduler.get_last_lr()[0], last_epoch)
+            writer.add_scalar('Train/lr',
+                              self.scheduler.get_last_lr()[0], last_epoch)
         # 开始训练
         for epoch_id in range(last_epoch, self.configs.train_conf.max_epoch):
             epoch_id += 1
             start_epoch = time.time()
             # 训练一个epoch
-            self.__train_epoch(epoch_id=epoch_id, local_rank=local_rank, writer=writer, nranks=nranks)
+            self.__train_epoch(epoch_id=epoch_id,
+                               local_rank=local_rank,
+                               writer=writer,
+                               nranks=nranks)
             # 多卡训练只使用一个进程执行评估和保存模型
             if local_rank == 0:
                 logger.info('=' * 70)
                 loss, acc = self.evaluate(resume_model=None)
-                logger.info('Test epoch: {}, time/epoch: {}, loss: {:.5f}, accuracy: {:.5f}'.format(
-                    epoch_id, str(timedelta(seconds=(time.time() - start_epoch))), loss, acc))
+                logger.info(
+                    'Test epoch: {}, time/epoch: {}, loss: {:.5f}, accuracy: {:.5f}'.
+                    format(epoch_id,
+                           str(timedelta(seconds=(time.time() - start_epoch))), loss,
+                           acc))
                 logger.info('=' * 70)
                 writer.add_scalar('Test/Accuracy', acc, test_step)
                 writer.add_scalar('Test/Loss', loss, test_step)
                 test_step += 1
                 self.model.train()
                 # 记录学习率
-                writer.add_scalar('Train/lr', self.scheduler.get_last_lr()[0], epoch_id)
+                writer.add_scalar('Train/lr',
+                                  self.scheduler.get_last_lr()[0], epoch_id)
                 # # 保存最优模型
                 if acc >= best_acc:
                     best_acc = acc
-                    self.__save_checkpoint(save_model_path=save_model_path, epoch_id=epoch_id, best_acc=acc,
+                    self.__save_checkpoint(save_model_path=save_model_path,
+                                           epoch_id=epoch_id,
+                                           best_acc=acc,
                                            best_model=True)
                 # 保存模型
-                self.__save_checkpoint(save_model_path=save_model_path, epoch_id=epoch_id, best_acc=acc)
+                self.__save_checkpoint(save_model_path=save_model_path,
+                                       epoch_id=epoch_id,
+                                       best_acc=acc)
 
-    def evaluate(self, resume_model='models/ecapa_tdnn_spectrogram/best_model/', save_matrix_path=None):
+    def evaluate(self,
+                 resume_model='models/ecapa_tdnn_spectrogram/best_model/',
+                 save_matrix_path=None):
         """
         评估模型
         :param resume_model: 所使用的模型
@@ -383,13 +441,17 @@ class PPAClsTrainer(object):
         # 保存混合矩阵
         if save_matrix_path is not None:
             cm = confusion_matrix(labels, preds)
-            plot_confusion_matrix(cm=cm, save_path=os.path.join(save_matrix_path, f'{int(time.time())}.png'),
+            plot_confusion_matrix(cm=cm,
+                                  save_path=os.path.join(save_matrix_path,
+                                                         f'{int(time.time())}.png'),
                                   class_labels=self.class_labels)
 
         self.model.train()
         return loss, acc
 
-    def export(self, save_model_path='models/', resume_model='models/ecapa_tdnn_spectrogram/best_model/'):
+    def export(self,
+               save_model_path='models/',
+               resume_model='models/ecapa_tdnn_spectrogram/best_model/'):
         """
         导出预测模型
         :param save_model_path: 模型保存的路径
@@ -407,9 +469,10 @@ class PPAClsTrainer(object):
         self.model.eval()
         # 获取静态模型
         infer_model = self.model.export()
-        infer_model_path = os.path.join(save_model_path,
-                                        f'{self.configs.use_model}_{self.configs.preprocess_conf.feature_method}',
-                                        'inference.pt')
+        infer_model_path = os.path.join(
+            save_model_path,
+            f'{self.configs.use_model}_{self.configs.preprocess_conf.feature_method}',
+            'inference.pt')
         os.makedirs(os.path.dirname(infer_model_path), exist_ok=True)
         torch.jit.save(infer_model, infer_model_path)
         logger.info("预测模型已保存：{}".format(infer_model_path))

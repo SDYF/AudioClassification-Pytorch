@@ -28,7 +28,9 @@ def setup_logger(name, output=None):
     logger.setLevel(logging.INFO)
     logger.propagate = False
 
-    formatter = ("[%(asctime2)s %(levelname2)s] %(module2)s:%(funcName2)s:%(lineno2)s - %(message2)s")
+    formatter = (
+        "[%(asctime2)s %(levelname2)s] %(module2)s:%(funcName2)s:%(lineno2)s - %(message2)s"
+    )
     color_formatter = ColoredFormatter(formatter, datefmt="%m/%d %H:%M:%S")
 
     ch = logging.StreamHandler(stream=sys.stdout)
@@ -86,4 +88,3 @@ class ColoredFormatter(logging.Formatter):
             record.funcName2 = termcolor.colored(record.funcName, color="cyan")
             record.lineno2 = termcolor.colored(record.lineno, color="cyan")
         return logging.Formatter.format(self, record)
-
